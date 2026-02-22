@@ -82,7 +82,12 @@ export class RentalsService {
       fine = diffDays * 10;
     }
 
-    await this.bookModel.findByIdAndUpdate(rental.bookId, { $inc: { "stock.available": 1 } });
+    // 🚀 แก้ไข: คืนสต็อกอย่างปลอดภัย ห้ามเกิน total เด็ดขาด
+    const book = await this.bookModel.findById(rental.bookId);
+    if (book) {
+      const newAvailable = Math.min(book.stock.available + 1, book.stock.total);
+      await this.bookModel.findByIdAndUpdate(rental.bookId, { "stock.available": newAvailable });
+    }
 
     rental.status = 'returned';
     rental.returnDate = now;
@@ -91,7 +96,7 @@ export class RentalsService {
     return rental.save();
   }
 
-// 4. ยกเลิกรายการจอง
+  // 4. ยกเลิกรายการจอง
   async cancelRental(rentalId: string) {
     const rental = await this.rentalModel.findById(rentalId);
     if (!rental) throw new NotFoundException('ไม่พบรายการเช่า');
@@ -101,12 +106,10 @@ export class RentalsService {
     }
 
     if (rental.paymentStatus !== 'pending' && rental.paymentStatus !== 'cancelled') {
-
       rental.paymentStatus = 'refund_verification';
 
-      // 🚀 แก้ไข: เปลี่ยนมาค้นหาด้วย String ธรรมดา เพราะใน DB คุณเซฟเป็น String
       await this.paymentModel.findOneAndUpdate(
-        { rentalId: rental._id.toString() }, // ✅ แปลง _id ให้เป็น String ให้ตรงกับที่เก็บใน payment
+        { rentalId: rental._id.toString() }, 
         { $set: { status: 'refund_verification' } }
       ).exec();
 
@@ -115,7 +118,13 @@ export class RentalsService {
     }
 
     rental.status = 'cancelled';
-    await this.bookModel.findByIdAndUpdate(rental.bookId, { $inc: { "stock.available": 1 } });
+
+    // 🚀 แก้ไข: คืนสต็อกอย่างปลอดภัย ห้ามเกิน total เด็ดขาด
+    const book = await this.bookModel.findById(rental.bookId);
+    if (book) {
+      const newAvailable = Math.min(book.stock.available + 1, book.stock.total);
+      await this.bookModel.findByIdAndUpdate(rental.bookId, { "stock.available": newAvailable });
+    }
 
     return rental.save();
   }
@@ -151,8 +160,9 @@ export class RentalsService {
       dueDate: { $lt: new Date() }
     });
 
+    // 🚀 แก้ไข: คิดรายได้เฉพาะรายการที่ paid และ "ไม่ถูกยกเลิก" เท่านั้น
     const revenue = transactions
-      .filter(r => r.paymentStatus === 'paid')
+      .filter(r => r.paymentStatus === 'paid' && r.status !== 'cancelled')
       .reduce((sum, r) => sum + r.cost, 0);
 
     return {

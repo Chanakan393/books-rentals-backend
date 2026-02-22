@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, isValidObjectId } from 'mongoose'; // 🚀 เพิ่ม isValidObjectId
 import { Book, BookDocument } from './entities/book.entity';
 import { CreateBookDto } from './dto/create-book.dto';
 
@@ -8,15 +8,12 @@ import { CreateBookDto } from './dto/create-book.dto';
 export class BooksService {
   constructor(@InjectModel(Book.name) private bookModel: Model<BookDocument>) { }
 
-  // สร้างหนังสือ (สำหรับ Admin หรือ Mock Data)
   async create(createBookDto: CreateBookDto) {
     const newBook = new this.bookModel(createBookDto);
     return newBook.save();
   }
 
-  // ค้นหาหนังสือ (Search)
   async findAll(search: string) {
-    // ✅ ตรวจสอบว่าเป็น string และไม่ใช่ Object ว่าง
     const query = (typeof search === 'string' && search.trim() !== '')
       ? { title: { $regex: search, $options: 'i' } }
       : {};
@@ -25,7 +22,13 @@ export class BooksService {
   }
 
   async findOne(id: string) {
-    return this.bookModel.findById(id).exec();
+    // 🚀 แก้ไข: ดักจับกรณีส่ง ID มั่วๆ มา จะได้ไม่ error 500
+    if (!isValidObjectId(id)) {
+      throw new BadRequestException('รหัสหนังสือไม่ถูกต้อง');
+    }
+    const book = await this.bookModel.findById(id).exec();
+    if (!book) throw new NotFoundException('ไม่พบข้อมูลหนังสือ');
+    return book;
   }
 
   async findByTitle(title: string) {
@@ -36,7 +39,7 @@ export class BooksService {
   }
 
   async remove(id: string) {
-    // ค้นหาและลบหนังสือตาม ID
+    if (!isValidObjectId(id)) throw new BadRequestException('รหัสหนังสือไม่ถูกต้อง');
     const result = await this.bookModel.findByIdAndDelete(id).exec();
 
     if (!result) {
@@ -47,7 +50,8 @@ export class BooksService {
   }
 
   async update(id: string, updateBookDto: any) {
-    // 🚀 เพิ่มตัวดักจับตรงนี้
+    if (!isValidObjectId(id)) throw new BadRequestException('รหัสหนังสือไม่ถูกต้อง');
+    
     if (updateBookDto.stock) {
       const { total, available } = updateBookDto.stock;
       if (available > total) {

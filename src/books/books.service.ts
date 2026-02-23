@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, isValidObjectId } from 'mongoose'; 
+import { Model, isValidObjectId } from 'mongoose';
 import { Book, BookDocument } from './entities/book.entity';
 import { CreateBookDto } from './dto/create-book.dto';
 // 🚀 1. Import RentalDocument เข้ามาเพื่อใช้กำหนด Type
@@ -10,8 +10,7 @@ import { RentalDocument, Rental } from '../rentals/entities/rental.entity';
 export class BooksService {
   constructor(
     @InjectModel(Book.name) private bookModel: Model<BookDocument>,
-    // 🚀 2. ฉีด RentalModel เข้ามาใช้งาน
-    @InjectModel(Rental.name) private rentalModel: Model<RentalDocument> 
+    @InjectModel(Rental.name) private rentalModel: Model<RentalDocument>
   ) { }
 
   private validateBookNumbers(data: any) {
@@ -23,7 +22,7 @@ export class BooksService {
         throw new BadRequestException('จำนวนหนังสือพร้อมใช้งานต้องไม่ติดลบ');
       }
     }
-    
+
     if (data.pricing) {
       const p = data.pricing;
       if (p.day3 !== undefined && p.day3 <= 0) throw new BadRequestException('ราคาเช่า 3 วันต้องมากกว่า 0 บาท');
@@ -44,12 +43,24 @@ export class BooksService {
     return newBook.save();
   }
 
-  async findAll(search: string) {
-    const query = (typeof search === 'string' && search.trim() !== '')
-      ? { title: { $regex: search, $options: 'i' } }
-      : {};
+  async findAll(search?: string, category?: string) {
+    let query: any = {};
 
-    return this.bookModel.find(query).exec();
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { author: { $regex: search, $options: 'i' } },
+        // 🚀 เพิ่มให้ค้นหาจากหมวดหมู่ในช่อง search หลักได้ด้วย
+        { category: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (category && category !== 'ทั้งหมด') {
+      // 🚀 ใช้ $regex แทนการเทียบค่าตรงๆ เพื่อให้หา "มังงะ" ใน "มังงะ (Manga)" เจอ
+      query.category = category;
+    }
+
+    return this.bookModel.find(query).sort({ updatedAt: -1 }).exec();
   }
 
   async findOne(id: string) {
@@ -81,7 +92,7 @@ export class BooksService {
 
   async update(id: string, updateBookDto: any) {
     if (!isValidObjectId(id)) throw new BadRequestException('รหัสหนังสือไม่ถูกต้อง');
-    
+
     this.validateBookNumbers(updateBookDto);
 
     if (updateBookDto.stock) {
@@ -90,13 +101,11 @@ export class BooksService {
         const newTotal = updateBookDto.stock.total !== undefined ? updateBookDto.stock.total : book.stock.total;
         const newAvailable = updateBookDto.stock.available !== undefined ? updateBookDto.stock.available : book.stock.available;
 
-        // 🚀 3. นับจำนวนหนังสือเล่มนี้ที่ถูก "จอง (booked)" หรือ "กำลังเช่า (rented)" อยู่
         const activeRentalsCount = await this.rentalModel.countDocuments({
           bookId: id,
           status: { $in: ['booked', 'rented'] }
         });
 
-        // 🚀 4. คำนวณจำนวนพร้อมใช้งาน "สูงสุด" ที่เป็นไปได้
         const maxPossibleAvailable = newTotal - activeRentalsCount;
 
         if (newAvailable > maxPossibleAvailable) {
@@ -105,10 +114,11 @@ export class BooksService {
       }
     }
 
+    // 🚀 อัปเดตข้อมูลและส่งค่าใหม่กลับไป
     const updatedBook = await this.bookModel.findByIdAndUpdate(
       id,
       updateBookDto,
-      { returnDocument: 'after' }
+      { new: true } // ให้ผลลัพธ์ที่ได้เป็นค่าที่อัปเดตแล้ว
     ).exec();
 
     if (!updatedBook) {

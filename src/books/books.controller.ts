@@ -1,18 +1,17 @@
 import { Controller, Get, Post, Delete, Patch, Body, Param, UseGuards, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { BooksService } from './books.service';
 import { CreateBookDto } from './dto/create-book.dto';
-import { AdminGuard } from '../common/guards/admin.guard'; 
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'; 
+import { AdminGuard } from '../common/guards/admin.guard';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { UpdateBookDto } from './dto/update-book.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-// 🚀 1. Import CloudinaryService
-import { CloudinaryService } from '../cloudinary/cloudinary.service'; 
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 
 @Controller('books')
 export class BooksController {
   constructor(
     private readonly booksService: BooksService,
-    private readonly cloudinaryService: CloudinaryService // 🚀 2. ฉีด Cloudinary เข้ามา
+    private readonly cloudinaryService: CloudinaryService
   ) { }
 
   // ==========================================
@@ -20,8 +19,12 @@ export class BooksController {
   // ==========================================
 
   @Get()
-  findAll(@Query('search') search: string) { 
-    return this.booksService.findAll(search);
+  findAll(
+    @Query('search') search: string,
+    @Query('category') category: string // 🚀 เพิ่มบรรทัดนี้เพื่อรับค่าหมวดหมู่
+  ) {
+    // 🚀 แล้วส่งต่อไปให้ Service
+    return this.booksService.findAll(search, category);
   }
 
   @Get(':id')
@@ -33,7 +36,7 @@ export class BooksController {
   // 🔴 โซน Admin Only (ต้องมีกุญแจ)
   // ==========================================
 
-  @UseGuards(JwtAuthGuard, AdminGuard) 
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Post()
   create(@Body() createBookDto: any) {
     return this.booksService.create(createBookDto);
@@ -43,12 +46,12 @@ export class BooksController {
   @Patch(':id')
   async update(
     @Param('id') id: string,
-    @Body() updateBookDto: UpdateBookDto 
+    @Body() updateBookDto: UpdateBookDto
   ) {
     return this.booksService.update(id, updateBookDto);
   }
 
-  @UseGuards(JwtAuthGuard, AdminGuard) 
+  @UseGuards(JwtAuthGuard, AdminGuard)
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.booksService.remove(id);
@@ -61,7 +64,7 @@ export class BooksController {
   async uploadCover(@UploadedFile() file: Express.Multer.File) {
     // โยนไฟล์ขึ้น Cloudinary ในโฟลเดอร์ชื่อ 'book-covers'
     const result = await this.cloudinaryService.uploadFile(file, 'book-covers');
-    
+
     // ส่ง URL ตัวเต็มที่ได้จาก Cloudinary กลับไปให้หน้าบ้าน
     return { url: result.secure_url };
   }

@@ -23,7 +23,7 @@ export class Book {
   @Prop()
   author: string;
 
-  @Prop({ type: [String], default: [] })
+  @Prop({ type: [String], default: [], required: true })
   category: string[];
 
   @Prop()
@@ -32,7 +32,6 @@ export class Book {
   @Prop()
   coverImage: string;
 
-  // ✅ จุดสำคัญ: ใช้ Class ย่อยที่ประกาศไว้ด้านบน
   @Prop({ type: Stock, _id: false })
   stock: Stock;
 

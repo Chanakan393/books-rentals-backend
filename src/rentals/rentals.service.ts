@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, isValidObjectId } from 'mongoose'; // 🚀 เพิ่ม isValidObjectId
+import { Model, isValidObjectId } from 'mongoose'; 
 import { Rental, RentalDocument } from './entities/rental.entity';
 import { Book, BookDocument } from '../books/entities/book.entity';
 import { Payment, PaymentDocument } from '../payment/entities/payment.entity';
@@ -16,12 +16,26 @@ export class RentalsService {
     @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
   ) { }
 
+  // 1. ลูกค้ากดจองหนังสือ (booked)
   async rentBook(userId: string, bookId: string, days: number) {
-    // 🚀 แก้ไข: ป้องกัน Error 500 หากส่ง ID ผิดรูปแบบ
     if (!isValidObjectId(bookId)) throw new BadRequestException('รหัสหนังสือไม่ถูกต้อง');
     
     if (![3, 5, 7].includes(days)) {
       throw new BadRequestException('เลือกจำนวนวันเช่าได้แค่ 3, 5 หรือ 7 วันเท่านั้น');
+    }
+
+    // 🚀 NEW LOGIC: ดักจับ Overdue แบบไม่สนใจเวลา (วัดกันที่วันที่)
+    const now = new Date();
+    const todayStart = new Date(now.setHours(0, 0, 0, 0)); // รีเซ็ตเวลาเป็น 00:00 ของวันนี้
+
+    const overdueCount = await this.rentalModel.countDocuments({
+      userId: userId,
+      status: 'rented',
+      dueDate: { $lt: todayStart } // ถ้าวันกำหนดคืน น้อยกว่า วันนี้ (00:00 น.) แสดงว่าเลยกำหนดแล้ว
+    });
+
+    if (overdueCount > 0) {
+      throw new BadRequestException('ไม่สามารถทำรายการได้! คุณมีหนังสือที่เกินกำหนดคืน กรุณานำมาคืนและชำระค่าปรับก่อนทำการเช่าเล่มใหม่ครับ');
     }
 
     const book = await this.bookModel.findOneAndUpdate(
@@ -33,8 +47,11 @@ export class RentalsService {
     if (!book) throw new BadRequestException('หนังสือหมด หรือไม่พร้อมให้เช่า');
 
     let rentalCost = days === 3 ? book.pricing.day3 : days === 5 ? book.pricing.day5 : book.pricing.day7;
+    
+    // ตั้งค่าวันกำหนดคืน (บวกจำนวนวันตรงๆ)
     const dueDate = new Date();
-    dueDate.setDate(new Date().getDate() + days);
+    dueDate.setDate(dueDate.getDate() + days);
+    dueDate.setHours(23, 59, 59, 999); // 🚀 ให้สิทธิ์คืนได้ถึงวินาทีสุดท้ายของวันนั้น
 
     const rental = new this.rentalModel({
       userId,
@@ -49,6 +66,7 @@ export class RentalsService {
     return rental.save();
   }
 
+  // 2. ลูกค้ามารับของ
   async pickupBook(rentalId: string) {
     if (!isValidObjectId(rentalId)) throw new BadRequestException('รหัสรายการเช่าไม่ถูกต้อง');
     const rental = await this.rentalModel.findById(rentalId);
@@ -67,6 +85,7 @@ export class RentalsService {
     return rental.save();
   }
 
+  // 3. คืนหนังสือ พร้อมคำนวณค่าปรับแบบไม่ฟิกเวลา
   async returnBook(rentalId: string) {
     if (!isValidObjectId(rentalId)) throw new BadRequestException('รหัสรายการเช่าไม่ถูกต้อง');
     const rental = await this.rentalModel.findById(rentalId);
@@ -75,11 +94,14 @@ export class RentalsService {
     }
 
     const now = new Date();
-    const dueDate = new Date(rental.dueDate);
+    const todayStart = new Date(now.setHours(0, 0, 0, 0)); // วันนี้ที่เวลา 00:00
+    const dueDateStart = new Date(new Date(rental.dueDate).setHours(0, 0, 0, 0)); // วันกำหนดคืนที่เวลา 00:00
+
     let fine = 0;
 
-    if (now > dueDate) {
-      const diffTime = Math.abs(now.getTime() - dueDate.getTime());
+    // 🚀 ถ้า "วันที่คืน" มากกว่า "วันกำหนดคืน" ถึงจะเริ่มปรับ
+    if (todayStart > dueDateStart) {
+      const diffTime = Math.abs(todayStart.getTime() - dueDateStart.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       fine = diffDays * 10;
     }
@@ -91,20 +113,18 @@ export class RentalsService {
     }
 
     rental.status = 'returned';
-    rental.returnDate = now;
+    rental.returnDate = new Date(); // เก็บเวลาจริงที่คืนไว้ดูอ้างอิง
     rental.fine = fine;
 
     return rental.save();
   }
 
-  // 🚀 แก้ไข: รับ userId มาเพื่อตรวจว่าเป็นเจ้าของบิลไหม
   async cancelRental(rentalId: string, currentUserId: string) {
     if (!isValidObjectId(rentalId)) throw new BadRequestException('รหัสรายการเช่าไม่ถูกต้อง');
     
     const rental = await this.rentalModel.findById(rentalId);
     if (!rental) throw new NotFoundException('ไม่พบรายการเช่า');
 
-    // 🚀 ป้องกันการแอบยกเลิกของคนอื่น (IDOR)
     if (rental.userId.toString() !== currentUserId) {
       throw new ForbiddenException('คุณไม่มีสิทธิ์ยกเลิกรายการเช่าของผู้อื่น');
     }
@@ -161,10 +181,14 @@ export class RentalsService {
 
     const activeBookings = await this.rentalModel.countDocuments({ ...query, status: 'booked' });
     const activeRentals = await this.rentalModel.countDocuments({ ...query, status: 'rented' });
+    
+    // 🚀 Dashboard เช็ค Overdue แบบไม่สนใจเวลาเช่นกัน
+    const now = new Date();
+    const todayStart = new Date(now.setHours(0, 0, 0, 0));
     const overdueRentals = await this.rentalModel.countDocuments({
       ...query,
       status: 'rented',
-      dueDate: { $lt: new Date() }
+      dueDate: { $lt: todayStart }
     });
 
     const revenue = transactions

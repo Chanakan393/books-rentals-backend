@@ -9,7 +9,7 @@ export class CloudinaryService {
     throw new Error('Method not implemented.');
   }
   constructor() {
-    // 🚀 เอาค่าจากเว็บ Cloudinary มาใส่ตรงนี้ครับ
+    // เอาค่าจากเว็บ Cloudinary มาใส่ตรงนี้ครับ
     cloudinary.config({
       cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
       api_key: process.env.CLOUDINARY_API_KEY,
@@ -20,13 +20,12 @@ export class CloudinaryService {
   uploadFile(file: Express.Multer.File, folderName: string): Promise<any> {
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
-        { folder: folderName }, // แยกโฟลเดอร์รูปปก กับ สลิป ให้เป็นระเบียบ
+        { folder: folderName }, // แยกโฟลเดอร์รูปปก กับ สลิป
         (error, result) => {
           if (error) return reject(error);
           resolve(result);
         },
       );
-      // โยนไฟล์จาก Memory ขึ้น Cloud
       streamifier.createReadStream(file.buffer).pipe(uploadStream);
     });
   }

@@ -12,23 +12,28 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
 
 @Module({
   imports: [
-    // ⚠️ อย่าลืมเปลี่ยน <password> เป็นรหัสผ่านของคุณ และชื่อ Database ตามต้องการ
+    // เชื่อมต่อฐานข้อมูล MongoDB
     MongooseModule.forRoot('mongodb+srv://books:books600@books.zzicbur.mongodb.net/books?retryWrites=true&w=majority'),
+    
+    // รวบรวม Module ย่อย
+    AuthModule,
     UsersModule,
     BooksModule,
     RentalsModule,
-    AuthModule,
+    PaymentModule,
+    CloudinaryModule,
+
+    // เรียกใช้ตัวแปรในไฟล์ .env
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    // ตั้งค่า rate limiting โดยใช้ ThrottlerModule
-    ThrottlerModule.forRoot([ { ttl: 60_000, // 1 minute
-    limit: 60, // 5 requests per minute
-    },
-  ]),
-    PaymentModule,
-    CloudinaryModule,
+
+    ThrottlerModule.forRoot([{ 
+      ttl: 60_000,
+      limit: 10,
+    }]),
   ],
+
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule { }

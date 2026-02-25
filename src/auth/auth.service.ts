@@ -12,48 +12,37 @@ export class AuthService {
         private configService: ConfigService
     ) { }
 
-    // 1. ฟังก์ชันตรวจสอบ User (Validate) - ✅ อัปเกรดความปลอดภัยสูงสุด
+    // ตรวจสอบว่ารหัสผ่านถูกไหม
     async validateUser(account: string, pass: string): Promise<any> {
-        // 🚀 ดักจับกรณีที่หน้าบ้านส่งค่า account หรือรหัสผ่านว่างเปล่ามา
-        if (!account || !pass) {
-            return null;
-        }
+        if (!account || !pass) return null;
 
         const user = await this.usersService.findByLogin(account);
 
-        // 🚀 ตรวจสอบอย่างรัดกุมว่ามี User และมีรหัสผ่านใน DB ให้เปรียบเทียบ
         if (user && user.password) {
+            // เทียบกับรหัสผ่านที่ถูกเข้ารหัส (Hash) ไว้ในฐานข้อมูล
             const isPasswordMatch = await bcrypt.compare(pass, user.password);
             if (isPasswordMatch) {
                 const { password, ...result } = user.toObject();
-                return result; // ถ้ารหัสถูก คืนค่าข้อมูล User ไปให้ Controller
+                return result;
             }
         }
-        
-        // ถ้ารหัสผิด จะข้ามเงื่อนไขด้านบนมาคืนค่า null ทันที!
         return null;
     }
 
-    // 2. ฟังก์ชัน Login
     async login(user: any) {
+        // เรียกฟังก์ชัน signTokens เพื่อสร้างคู่ Access & Refresh Token
         const tokens = await this.signTokens(user);
 
         const salt = await bcrypt.genSalt(10);
         const hash = await bcrypt.hash(tokens.refresh_token, salt);
         await this.usersService.setRefreshTokenHash(user._id.toString(), hash);
 
-        return {
-            ...tokens,
-            user: {
-                id: user._id,
-                username: user.username,
-                role: user.role
-            }
-        };
+        return { ...tokens, user: { id: user._id, username: user.username, role: user.role } };
     }
 
-    // 3. logout
+    // ออกจากระบบด้วยการทำลาย Token
     async logout(userId: string) {
+        // เคลียร์ค่า Refresh Token ใน DB ทิ้ง เพื่อไม่ให้เอาไปใช้ขอ Token ใหม่ได้อีก
         await this.usersService.setRefreshTokenHash(userId, null);
         return { message: 'ออกจากระบบเรียบร้อยแล้ว' };
     }
@@ -75,18 +64,18 @@ export class AuthService {
 
     async signTokens(user: any) {
         const payload = { username: user.username, sub: user._id, role: user.role };
-
         const atTime = parseInt(this.configService.get('JWT_ACCESS_EXPIRATION') ?? '3600');
         const rtTime = parseInt(this.configService.get('JWT_REFRESH_EXPIRATION') ?? '604800');
 
         const [at, rt] = await Promise.all([
+            // นำข้อมูล User ไปประทับตราสร้างเป็น Token พร้อมระบุเวลาหมดอายุ
             this.jwtService.signAsync(payload, {
                 secret: this.configService.get('JWT_ACCESS_SECRET'),
-                expiresIn: atTime, 
+                expiresIn: atTime,
             }),
             this.jwtService.signAsync(payload, {
                 secret: this.configService.get('JWT_REFRESH_SECRET'),
-                expiresIn: rtTime, 
+                expiresIn: rtTime,
             }),
         ]);
 

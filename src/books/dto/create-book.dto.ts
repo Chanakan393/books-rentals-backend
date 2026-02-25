@@ -1,7 +1,7 @@
 import { IsString, IsNumber, IsOptional, ValidateNested, Min, IsArray, MaxLength, IsInt } from 'class-validator';
 import { Type } from 'class-transformer';
 
-// 1. สร้าง Class ย่อยสำหรับ Stock
+// Class ย่อยสำหรับ Stock
 class StockDto {
   @IsInt()
   @Min(1)
@@ -12,7 +12,7 @@ class StockDto {
   available: number;
 }
 
-// 2. สร้าง Class ย่อยสำหรับ Pricing (3/5/7 วัน)
+// Class ย่อยสำหรับ Pricing (3/5/7 วัน)
 class PricingDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(1)
@@ -27,7 +27,7 @@ class PricingDto {
   day7: number;
 }
 
-// 3. Class หลัก
+// Class หลัก
 export class CreateBookDto {
   @IsString()
   title: string;

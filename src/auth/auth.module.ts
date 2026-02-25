@@ -11,18 +11,16 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
   imports: [
     UsersModule,
     PassportModule,
-    // ✅ 2. เปลี่ยนมาใช้ registerAsync ตามนี้ครับ
     JwtModule.registerAsync({
-      imports: [ConfigModule], // 👈 สำคัญมาก! ต้องบอกว่าฉันจะใช้ ConfigModule นะ
-      inject: [ConfigService], // 👈 ฉีด ConfigService เข้าไปใน useFactory
+      imports: [ConfigModule],
+      inject: [ConfigService], 
       useFactory: async (configService: ConfigService) => ({
-        // ดึงค่าจาก .env หรือถ้าไม่มีให้ใช้ค่าสำรอง (ป้องกัน error)
         secret: configService.get<string>('JWT_ACCESS_SECRET') || 'fallback_secret'
       }),
     }),
   ],
-  providers: [AuthService, JwtStrategy],
-  controllers: [AuthController],
-  exports: [AuthService],
+  controllers: [AuthController], // 🎯 ต้องมีบรรทัดนี้ เพื่อให้ NestJS รู้จักเส้นทาง API
+  providers: [AuthService, JwtStrategy], // 🎯 ต้องมี AuthService และ Strategy
+  exports: [AuthService], // เผื่อ Module อื่นต้องใช้
 })
 export class AuthModule {}

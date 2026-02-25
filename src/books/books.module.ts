@@ -7,9 +7,11 @@ import { Rental, RentalSchema } from '../rentals/entities/rental.entity';
 
 @Module({
   imports: [
+    // ผูก Schema ของ MongoDB เข้ากับ Module
     MongooseModule.forFeature([
       { name: Book.name, schema: BookSchema },
-      { name: Rental.name, schema: RentalSchema }
+      // import RentalSchema เพราะ BooksService มีการนับยอดการเช่าเพื่อเช็คสต็อก
+      { name: Rental.name, schema: RentalSchema } 
     ])
   ],
   controllers: [BooksController],

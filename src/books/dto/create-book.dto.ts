@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, ValidateNested, Min, IsArray, MaxLength, IsInt } from 'class-validator';
+import { IsString, IsNumber, IsOptional, ValidateNested, Min, IsArray, MaxLength, IsInt, ArrayMinSize } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // Class ย่อยสำหรับ Stock
@@ -37,6 +37,7 @@ export class CreateBookDto {
 
   @IsArray()
   @IsString({ each: true })
+  @ArrayMinSize(1, { message: 'ต้องเลือกหมวดหมู่อย่างน้อย 1 หมวดหมู่' })
   category: string[];
 
   @IsOptional()

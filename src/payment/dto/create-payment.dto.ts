@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import { IsString, IsNumber } from 'class-validator';
 
 export class CreatePaymentDto {
@@ -13,7 +14,9 @@ export class CreatePaymentDto {
     example: 150, 
     description: 'ยอดเงินที่ชำระตามจริง' 
   })
+
   @IsNumber()
+  @Type(() => Number)
   amount: number;
 
   @ApiProperty({ 
